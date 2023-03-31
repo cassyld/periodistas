@@ -1,0 +1,497 @@
+---
+title: "Journal of Conflict Resolution Replication File"
+output:
+  html_document: default
+  pdf_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+**Project:** *Does Violence Against Journalists Deter Detailed Reporting? Evidence From Mexico*
+**Authors:** Dr. Cassy Dorff, Colin Henry, and Dr. Sandra Ley
+**File:** JCR-replication.Rmd
+**Description:** Generates all figures, tables, and models provided in the manuscript and appendix.
+
+# Loading required libraries
+
+The following chunk *will install* missing package dependencies from CRAN on your computer. Please ensure you have the proper permissions to do so before running this code chunk. If you experience any error messages during the installation process, please contact the package maintainer(s) or local IT support staff for assistance.
+
+```{r}
+
+loadPkg = function( toLoad ){
+  for( lib in toLoad ){
+    if( ! lib %in% installed.packages()[,1] )
+    { install.packages(lib, repos='http://cran.rstudio.com/') }
+    suppressMessages( library(lib, character.only=TRUE) ) }
+}
+
+packs = c('tidyverse','stargazer','coefplot', 'ggcorrplot', 'ggeffects', 'effects', 
+          'lubridate', 'scales', 'zoo', 'MASS', 'caret')
+
+loadPkg(packs)
+
+# path git graphics
+# pathGraphics <- '~/ProjectsGit/periodistas/graphics/'
+```
+
+# Loading required data
+
+Please ensure that the replication data file is in your working directory before running this chunk.
+
+```{r}
+# load data
+load("../data/replicationData.rda")
+
+## convert date to date obj; arrange by date
+sp_reforma_sub$date <- as.yearmon(sp_reforma_sub$date, "%B %Y")
+s_data <- sp_reforma_sub %>% arrange(sp_reforma_sub$date)
+```
+
+# Descriptive figures
+
+## Figure 1 (Reporting specificity overtime in Reforma from 2000-2017)
+
+```{r}
+
+plot_specificity <- ggplot(s_data, aes(x=as.Date(date), y= perp_specific)) +
+    geom_bar(stat="identity", width=40) +
+    theme_minimal() +
+    theme(plot.title=element_text(size=18),
+          axis.text.x=element_text(size=18, angle=60, hjust=1),
+          axis.text.y=element_text(size=14),
+          axis.title=element_text(size=18),
+          legend.text=element_text(size=18),
+          axis.ticks = element_blank(), panel.border=element_blank()) +
+        labs(y = "Count")  +
+    scale_x_date(" ", labels = date_format("%Y"), breaks = "1 year")
+
+plot_specificity
+
+#ggsave(paste0(pathGraphics, "figure1.png"), width=10, height=6, plot=plot_specificity)
+```
+
+## Figure 2 (Stacked bar chart showing lethal and non-lethal attacks against journalists overtime according to LNPP data)
+
+```{r}
+lnpp_stack <- s_data %>%
+    filter(year>=2006 & year <=2016) %>%
+    dplyr::select(date, nv_periodista, v_periodista) %>%
+    gather(key="variable", "value", -date)
+
+lnpp_stack$date <- as.Date(lnpp_stack$date)
+
+lnpp_stack <- lnpp_stack %>%
+  dplyr::group_by(variable, date)  %>%
+  summarize( totalAttacks = sum(value, na.rm=TRUE) )
+
+plot_lnpp_stack <- ggplot(lnpp_stack, aes(x=date, y=totalAttacks)) +
+  geom_col(aes(fill=variable))  +
+  scale_fill_manual(values = c("#ABABAB", "#383838"),
+    labels = c("Non-lethal   ", "Lethal")) +
+    labs(x='', y='Count', fill='') +
+  theme_minimal() +
+  theme(
+    text=element_text(size=18),
+    legend.position = "bottom", axis.ticks = element_blank(),
+    legend.title = element_blank())
+
+plot_lnpp_stack
+#ggsave(paste0(pathGraphics, "figure2.png"), width=10, height=6, plot=plot_lnpp_stack)
+```
+
+## Figure 3 (National DTO-related homicide rate by month from 2000-2017)
+
+```{r}
+h_data <- s_data %>%
+  filter(date >= 2000 & date <= 2017)
+
+plot_homic_month <- ggplot(h_data, aes(x=as.Date(date), y=homi_h_tot_rate)) +
+  geom_bar(stat="identity", width=40) +
+  theme_minimal() +
+  theme(plot.title=element_text(size=18),
+    axis.text.x=element_text(size=16, angle=60, hjust=1),
+    axis.text.y=element_text(size=16),
+    axis.title=element_text(size=18),
+    legend.text=element_text(size=18),
+    axis.ticks = element_blank(), panel.border=element_blank()) +
+  labs(y = "Drug-related Homicide Rate per 100,000 ", x ="") +
+  scale_x_date(breaks = "1 year", labels=date_format("%Y") )
+
+plot_homic_month
+#ggsave(paste0(pathGraphics, "figure3.png"), width=10, height=6, plot=plot_homic_month)
+```
+
+# Main Models
+
+## Figure 4 (Model 1)
+
+Ensure date range is correct.
+
+```{r}
+# model data
+m_data <- s_data %>%
+  filter(year >= 2006 & year < 2017)
+```
+
+```{r}
+# Model 1: negative binomial, LNPP data [figure 4] [table 2 appendix]
+model1 <- glm.nb(perp_specific ~ v_periodista + nv_periodista +
+                    homi_h_tot_rate,
+                    data = m_data)
+
+coef_model1 <- coefplot::coefplot(model1, color="black",
+                coefficients = c("v_periodista", "nv_periodista", "homi_h_tot_rate"))
+
+plot_coef_model1 <- coef_model1 +
+                labs(title = "") +
+                theme_minimal() +
+                theme(text=element_text(size=18)) +
+                theme(axis.title.x = element_blank()) +
+                scale_y_discrete(name="",
+                labels=c("Lethal Attacks", "Non-lethal Attacks", "Homicides"))
+
+plot_coef_model1
+#ggsave(paste0(pathGraphics, "figure4.png"), width=10, height=6, plot=plot_coef_model1)
+
+```
+
+## Figure 5 (Model 2)
+
+```{r}
+# Model 2: negative binomial, LNPP data [figure 4] [table 2 appendix]
+model2 <- glm.nb(perp_specific ~ polEvents + natDisasters + campaigns + en_cortoBIN + attacks
+                   + dtoCount + homi_h_tot_rate + nv_periodista + v_periodista,
+                    data = m_data)
+
+coef_model2 <- coefplot::coefplot(model2, color="black",
+                        coefficients = c("en_cortoBIN", "campaigns",
+                                         "attacks", "polEvents",
+                                         "dtoCount", "natDisasters",
+                                         "attacks", "v_periodista",
+                                         "nv_periodista", "homi_h_tot_rate"))
+
+plot_coef_model2 <- coef_model2 +
+                        scale_y_discrete(name = "",
+                                         labels = rev(c("Lethal Attacks", "Non-lethal Attacks",
+                                                        "Homicides", "OCG Count",
+                                                        "Reforma Attacks", "En Corto Stories",
+                                                        "Political Campaigns",
+                                                        "Natural Disasters",
+                                                        "Political Events"))) +
+                        labs(title = "") +
+                        theme_minimal() +
+                        theme(text=element_text(size=18)) +
+                        theme(axis.title.x = element_blank())
+
+plot_coef_model2
+#ggsave(paste0(pathGraphics, "figure5.png"), width=10, height=6, plot=plot_coef_model2)
+
+```
+
+## Figure 6 (Model 2)
+
+```{r}
+# Marginal effects, model 2: negative binomial, LNPP data [figure 6]
+me_model2 <- ggpredict(model2, terms = "v_periodista")
+plot_me_model2 <- ggplot(me_model2, aes(x, predicted)) +
+    geom_line() +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.1) +
+    labs(title = "") +
+    xlab("Lethal Attacks Against Journalists") + ylab("Predicted Specificity") +
+    theme_light() +
+    theme(plot.title=element_text(size=18),
+          axis.text.x=element_text(size=18),
+          axis.text.y=element_text(size=18),
+          axis.title=element_text(size=18),
+          legend.text=element_text(size=18),
+          legend.position="bottom",
+          axis.ticks = element_blank(), panel.border=element_blank())
+
+plot_me_model2
+#ggsave(paste0(pathGraphics, "figure6.png"), width=10, height=6, plot=plot_me_model2)
+```
+
+
+## Figure 7 (Counts of anonymous bylines printed from 2000-2017)
+
+```{r}
+plot_anon_byline <- ggplot(s_data,
+                      aes(x=as.Date(date), y= anon_byline_count, width=40)) +
+                    geom_bar(stat="identity") +
+                    theme_minimal() +
+                    theme(plot.title=element_text(size=18),
+                      axis.text.x=element_text(size=18, angle=60, hjust=1),
+                      axis.text.y=element_text(size=18),
+                      axis.title=element_text(size=18), legend.text=element_text(size=14),
+                      axis.ticks = element_blank(), panel.border=element_blank()) +
+                    ylab(" ")  +
+                   scale_x_date(" ", labels = date_format("%Y"), breaks = "1 year")
+
+plot_anon_byline
+#ggsave(paste0(pathGraphics, "figure7.png"), width=10, height=6, plot=plot_anon_byline)
+```
+
+
+## Figure 8 (Bivariate relationship demonstrating positive correlation between anonymous bylines and reporting specificity)
+
+```{r}
+plot_anon_report <- ggplot(s_data, aes(x=perp_specific, y=anon_byline_count) ) +
+  geom_point() +
+  geom_smooth(colour="grey64") +
+  labs(title= "",
+       x="Reporting Specificity", y="# of Anonymous Bylines") +
+    theme_minimal() +
+theme(plot.title=element_text(size=18),
+                      axis.text.x=element_text(size=18),
+                      axis.text.y=element_text(size=18),
+                      axis.title=element_text(size=18), legend.text=element_text(size=14),
+                      axis.ticks = element_blank(), panel.border=element_blank())
+
+plot_anon_report
+#ggsave(paste0(pathGraphics, "figure8.png"), width=10, height=6, plot=plot_anon_report)
+```
+
+## Figure 9 (Model 3)
+
+```{r}
+# Model 3: negative binomial, LNPP data + reforma IVs
+model3 <- glm.nb(perp_specific ~
+                   polEvents + anon_byline_count +
+                   natDisasters + campaigns + attacks +
+                   dtoCount + homi_h_tot_rate + nv_periodista + v_periodista,
+                data = m_data)
+
+coef_model3 <- coefplot::coefplot(model3, color="black",
+                        coefficients = c("homi_h_tot_rate", "v_periodista", "nv_periodista",
+                                        "attacks", "dtoCount", "campaigns", "attacks",
+                                        "polEvents","anon_byline_count", "natDisasters"))
+
+plot_coef_model3 <- coef_model3 +
+    scale_y_discrete(name="",
+                     labels = rev(c("Lethal Attacks", "Non-lethal Attacks", "Homicides",
+                                    "OCG Count", "Reforma Attacks",
+                                    "Political Campaigns", "Natural Disasters",
+                                    "Anonymous Bylines", "Political Events"))) +
+                    labs(title = "") +
+                    theme_minimal() +
+                    theme(text=element_text(size=18)) +
+                    theme(axis.title.x = element_blank())
+
+plot_coef_model3
+#ggsave(paste0(pathGraphics, "figure9.png"), width=10, height=6, plot=plot_coef_model3)
+```
+
+# Appendix
+
+## Table 4 (Models 1, 2, and 3)
+
+```{r}
+
+## Main paper models
+model1 <- glm.nb(perp_specific ~ v_periodista + nv_periodista +
+                     homi_h_tot_rate,
+                 data = m_data)
+
+model2 <- glm.nb(perp_specific ~ v_periodista + nv_periodista +
+                     en_cortoBIN + attacks + dtoCount +
+                     homi_h_tot_rate + polEvents +
+                     natDisasters + campaigns,
+                 data = m_data)
+
+model3 <- glm.nb(perp_specific ~ v_periodista + nv_periodista +
+                     anon_byline_count + attacks + dtoCount +
+                     homi_h_tot_rate + polEvents +
+                     natDisasters + campaigns,
+                 data = m_data)
+
+stargazer(model1, model2, model3,
+          title = "Models 1, 2, & 3: LNPP Data",
+          omit.stat=c("LL","ser","f"),
+          dep.var.labels = c("Specificity"),
+          covariate.labels = c("Lethal attacks",
+                               "Non-lethal attacks",
+                               "En Corto articles",
+                               "Byline count",
+                               "Attacks on Reforma",
+                               "OCG count",
+                               "Homicide rate",
+                               "Political events",
+                               "Natural disasters",
+                               "Political campaigns",
+                               "Constant"),
+          align=TRUE)
+
+```
+
+## Table 5 (Models 2a and 3a)
+
+```{r}
+
+## Robustness checks
+### Model 2a: negative binomial, LNPP data + narcomantas measure
+model2a <- glm.nb(perp_specific ~ v_periodista + nv_periodista +
+                      en_cortoBIN + attacks + dtoCount +
+                      homi_h_tot_rate + narco_msg + polEvents +
+                      natDisasters + campaigns,
+                 data = m_data)
+
+### Model 3a: negative binomial, LNPP data + reforma IVs + narcomantas measure
+model3a <- glm.nb(perp_specific ~ v_periodista + nv_periodista +
+                      anon_byline_count + attacks + dtoCount +
+                      homi_h_tot_rate + narco_msg + polEvents +
+                      natDisasters + campaigns,
+                  data = m_data)
+
+stargazer(model2a, model3a,
+          title = "Models 2a & 3a: LNPP Data & 'narcomantas' Data",
+          omit.stat=c("LL","ser","f"),
+          dep.var.labels = c("Specificity"),
+          covariate.labels = c("Lethal attacks",
+                               "Non-lethal attacks",
+                               "En Corto articles",
+                               "Byline count",
+                               "Attacks on Reforma",
+                               "OCG count",
+                               "Homicide rate",
+                               "Narcomantas",
+                               "Political events",
+                               "Natural disasters",
+                               "Political campaigns",
+                               "Constant"),
+          align=TRUE)
+
+```
+
+## Table 6 (Models 2b and 3b)
+
+```{r}
+
+## Robustness checks
+
+### Model 2b: negative binomial, LNPP data + average story length
+model2b <- glm.nb(perp_specific ~ v_periodista + nv_periodista +
+                      en_cortoBIN + attacks + dtoCount +
+                      homi_h_tot_rate + avg_story + polEvents +
+                      natDisasters + campaigns,
+                      polEvents + natDisasters + campaigns + dtoCount +
+                    en_cortoBIN + attacks + avg_story +
+                    homi_h_tot_rate + nv_periodista + v_periodista,
+                  data = m_data)
+
+### Model 3b: negative binomial, LNPP data + reforma IVs + average story length
+model3b <- glm.nb(perp_specific ~ v_periodista + nv_periodista +
+                      anon_byline_count + attacks + dtoCount +
+                      homi_h_tot_rate + avg_story + polEvents +
+                      natDisasters + campaigns,
+                  data = m_data)
+
+stargazer(model2b, model3b,
+          title = "Models 2b & 3b: LNPP Data & Average Story Length",
+          omit.stat=c("LL","ser","f"),
+          dep.var.labels = c("Specificity"),
+          covariate.labels = c("Lethal attacks",
+                               "Non-lethal attacks",
+                               "En Corto articles",
+                               "Byline count",
+                               "Attacks on Reforma",
+                               "OCG count",
+                               "Homicide rate",
+                               "Average story length",
+                               "Political events",
+                               "Natural disasters",
+                               "Political campaigns",
+                               "Constant"),
+          align=TRUE)
+
+```
+
+## Table 7 (Models 2c and 3c)
+
+```{r}
+
+## Robustness checks
+
+### Model 2c: negative binomial, LNPP data + 1 month lag
+model2c <- glm.nb(perp_specific ~ lag(v_periodista) + lag(nv_periodista) +
+                      en_cortoBIN + attacks + dtoCount +
+                      lag(homi_h_tot_rate) + polEvents +
+                      natDisasters + campaigns,
+                 data = m_data)
+
+### Model 3c: negative binomial, LNPP data + reforma IVs + 1 month lag
+model3c <- glm.nb(perp_specific ~ lag(v_periodista) + lag(nv_periodista) +
+                      anon_byline_count + attacks + dtoCount +
+                      lag(homi_h_tot_rate) + polEvents +
+                      natDisasters + campaigns,
+                 data = m_data)
+
+stargazer(model2c, model3c,
+          title = "Models 2c & 3c: LNPP Data & 1-month Lag",
+          omit.stat=c("LL","ser","f"),
+          dep.var.labels = c("Specificity"),
+          covariate.labels = c("Lethal attacks^{t-1}",
+                               "Non-lethal attacks^{t-1}",
+                               "En Corto articles",
+                               "Byline count",
+                               "Attacks on Reforma",
+                               "OCG count",
+                               "Homicide rate^{t-1}",
+                               "Political events",
+                               "Natural disasters",
+                               "Political campaigns",
+                               "Constant"),
+          align=TRUE)
+
+```
+
+## Figure 1 Appendix (Correlation between independent variables in modeling framework)
+
+```{r}
+
+iv_cor <- m_data %>%
+          dplyr::select( c(polEvents,natDisasters,campaigns,dtoCount,
+                          en_cortoBIN,attacks,narco_msg, avg_story,
+                          homi_h_tot_rate,nv_periodista,v_periodista) ) %>%
+          cor(use = "complete.obs")
+
+colnames(iv_cor) <- c("Political Events", "Natural Disasters", "Campaigns",
+                      "OCG Count", "En Corto", "Reforma Attacks",
+                      "Narcomantas", "Avg Story", "Homicides", "Non-lethal Attacks", "Lethal Attacks")
+rownames(iv_cor) <- c("Political Events", "Natural Disasters", "Campaigns",
+                      "OCG Count", "En Corto", "Reforma Attacks",
+                      "Narcomantas", "Avg Story", "Homicides", "Non-lethal Attacks", "Lethal Attacks")
+
+test <- corr <- round(cor(iv_cor), 1)
+corr_plot <- ggcorrplot(test, lab=TRUE, hc.order= TRUE, lab_size=2, type = "lower")
+
+ggsave(paste0(pathGraphics, "supp_fig1.png"), width=10, height=6, plot=corr_plot)
+```
+
+## Predictive Performance
+
+```{r}
+
+### K-FOLD CROSSVAL
+## divide data into k-folds
+## Model 2
+trainCtrl <- trainControl(method = "repeatedcv", number = 10, repeats = 5, savePredictions = T, classProbs = T)
+
+model2_xv <- train(perp_specific ~ polEvents + natDisasters + campaigns + en_cortoBIN + attacks +
+                   dtoCount + homi_h_tot_rate + nv_periodista + v_periodista,
+               method = "glm.nb",
+               data = m_data,
+               trControl = trainCtrl,
+               na.action = "na.omit")
+
+## Model 1
+model1_xv <- train(perp_specific ~ v_periodista + nv_periodista +
+                       homi_h_tot_rate,
+               method = "glm.nb",
+               data = m_data,
+               trControl = trainCtrl,
+               na.action = "na.omit")
+
+model2_xv
+model1_xv
+
+```
