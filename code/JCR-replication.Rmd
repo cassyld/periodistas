@@ -10,7 +10,7 @@ editor_options:
 **Project:** *Does Violence Against Journalists Deter Detailed Reporting? Evidence From Mexico*
 **Authors:** Dr. Cassy Dorff, Colin Henry, and Dr. Sandra Ley
 **File:** JCR-replication.Rmd
-**Description:** Generates all figures, tables, and models provided in the manuscript and appendix.
+**Description:** Generates all figures, tables, and models provided in the manuscript and appendix. Article is published (2023) in the Journal of Conflict Resolution. Please read our article for more information!
 
 # Loading required libraries
 
